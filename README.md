@@ -1,2 +1,2 @@
 # crystalator
-A simple simulation of salt cristallization.
+A simple simulation of salt crystallization.
