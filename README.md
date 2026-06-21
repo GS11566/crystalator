@@ -12,7 +12,7 @@ source .venv/bin/activate
 ```
 Install numpy and pygame
 ```shell
-pip install numpy pygame
+pip install numpy pygame-ce
 ```
 And run!
 ```shell
