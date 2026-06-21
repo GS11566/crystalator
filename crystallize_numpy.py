@@ -21,20 +21,20 @@ camera_posx, camera_posy = 0, 0
 camera_zoom = 1
 dragging = False
 
-DT = 0.01
+DT = 0.001
 
 WORLD_CENTER = (WIDTH / 2, HEIGHT / 2)
-K = 0.003
+K_C = 0.002
 
 PART1_COL    = "#5555ee"
-PART1_Q      = 1
-PART1_SIZE   = 10
+PART1_Q      = 2
+PART1_SIZE   = 20
 PART1_WEIGHT = 1
 
 PART2_COL   = "#ee5555"
 PART2_Q     = -1
 PART2_SIZE  = 10
-PART2_WEIGHT = 1
+PART2_WEIGHT = 2
 
 _GCD = math.gcd(PART1_WEIGHT, PART2_WEIGHT)
 PART1_WEIGHT //= _GCD
@@ -43,13 +43,15 @@ PARTICLE_TYPES = [(PART1_Q, PART1_SIZE, PART1_COL)] * PART1_WEIGHT +\
                  [(PART2_Q, PART2_SIZE, PART2_COL)] * PART2_WEIGHT
 
 DRAG = 0.5
-TEMP = 70
+TEMP = 0.25
+K_E = 180000
+EPSILON = 400
 
 np.random.seed(42)
 
 MAX_PARTICLES = 260
-ADD_PARTICLE_MS = 1000
-ADD_PARTICLE_ANGLE_ADVANCE = 0.4
+ADD_PARTICLE_MS = 700
+ADD_PARTICLE_ANGLE_SPEED = 0.4
 
 pos, vel, acc, charges, sizes, colors = np.zeros((MAX_PARTICLES, 2), dtype=np.float64), np.zeros((MAX_PARTICLES, 2), dtype=np.float64),\
                                         np.zeros((MAX_PARTICLES, 2), dtype=np.float64), np.zeros(MAX_PARTICLES, dtype=np.float64),\
@@ -61,6 +63,9 @@ pygame.time.set_timer(ADD_PARTICLE_EVENT, ADD_PARTICLE_MS)
 ELLIPSE_A = WIDTH / 2
 ELLIPSE_B = HEIGHT / 2
 ANGLE = 0
+
+TEMP /= DT
+ADD_PARTICLE_ANGLE_ADVANCE = ADD_PARTICLE_ANGLE_SPEED * ADD_PARTICLE_MS
 
 running = True
 frame_count = 0
@@ -91,7 +96,7 @@ while running:
                 elif event.button == 5:
                     camera_zoom /= zoom_speed
 
-                camera_zoom = max(0.1, min(camera_zoom, 10.0))
+                camera_zoom = max(0.05, min(camera_zoom, 20))
                 camera_posx = world_x - mouse_x / camera_zoom
                 camera_posy = world_y - mouse_y / camera_zoom
 
@@ -132,7 +137,6 @@ while running:
         sigma = sizes_sum * 0.890898718147
 
         charges_prod = charges[:N, np.newaxis] * charges[np.newaxis, :N]
-        epsilon = 400
 
         min_r_sq = (0.4 * sigma)**2
         r_sq_clamped = np.maximum(r_sq, min_r_sq)
@@ -142,22 +146,24 @@ while running:
         sr6 = sr**6
         sr12 = sr6**2
 
-        F_r = 24 * epsilon * (2 * sr12 - sr6) / r_sq_clamped
+        F_r = 24 * EPSILON * (2 * sr12 - sr6) / r_sq_clamped
 
-        is_similar = charges_prod > 0
-        F_r = np.where(is_similar, 48 * epsilon * sr12 / r_sq_clamped, F_r)
+        # is_similar = charges_prod > 0
+        # F_r = np.where(is_similar, 48 * EPSILON * sr12 / r_sq_clamped, F_r)
 
-        force_scalar = F_r
+        F_c = K_E * charges_prod / (r_sq_clamped * r)
+
+        force_scalar = F_r + F_c
 
         forces = diff * force_scalar[:, :, np.newaxis]
         acc = np.sum(forces, axis=1)
 
         d_center = pos[:N] - WORLD_CENTER
-        center_force = -K * d_center
+        center_force = -K_C * d_center
         acc += center_force
 
         vel[:N] += acc * DT
-        vel[:N] *= (1.0 - DRAG * DT)
+        vel[:N] *= (1 - DRAG * DT)
 
         if TEMP > 0:
             noise_scale = math.sqrt(2 * TEMP * DRAG * DT)
@@ -171,13 +177,14 @@ while running:
     # else:
     #     TEMP = 0
 
-    drawx = ((pos[:N, 0] - camera_posx) * camera_zoom).astype(int)
-    drawy = ((pos[:N, 1] - camera_posy) * camera_zoom).astype(int)
-    draw_sizes = np.round(sizes * camera_zoom).astype(int)
+    if frame_count % 2 == 0:
+        drawx = np.round((pos[:N, 0] - camera_posx) * camera_zoom).astype(int)
+        drawy = np.round((pos[:N, 1] - camera_posy) * camera_zoom).astype(int)
+        draw_sizes = np.round(sizes * camera_zoom).astype(int)
 
-    for i in range(N):
-        if -draw_sizes[i] <= drawx[i] <= WIDTH + draw_sizes[i] and -draw_sizes[i] <= drawy[i] <= HEIGHT + draw_sizes[i]:
-            pygame.draw.circle(screen, colors[i], (drawx[i], drawy[i]), draw_sizes[i], width=0)
+        for i in range(N):
+            if -draw_sizes[i] <= drawx[i] <= WIDTH + draw_sizes[i] and -draw_sizes[i] <= drawy[i] <= HEIGHT + draw_sizes[i]:
+                pygame.draw.circle(screen, colors[i], (drawx[i], drawy[i]), draw_sizes[i], width=0)
 
     if frame_count % 20 == 0:
         fps = int(clock.get_fps())
