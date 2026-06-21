@@ -24,17 +24,17 @@ dragging = False
 DT = 0.001
 
 WORLD_CENTER = (WIDTH / 2, HEIGHT / 2)
-K_C = 0.002
+K_C = 0.02
 
 PART1_COL    = "#5555ee"
-PART1_Q      = 2
-PART1_SIZE   = 20
+PART1_Q      = 1
+PART1_SIZE   = 10
 PART1_WEIGHT = 1
 
 PART2_COL   = "#ee5555"
 PART2_Q     = -1
 PART2_SIZE  = 10
-PART2_WEIGHT = 2
+PART2_WEIGHT = 1
 
 _GCD = math.gcd(PART1_WEIGHT, PART2_WEIGHT)
 PART1_WEIGHT //= _GCD
@@ -43,14 +43,13 @@ PARTICLE_TYPES = [(PART1_Q, PART1_SIZE, PART1_COL)] * PART1_WEIGHT +\
                  [(PART2_Q, PART2_SIZE, PART2_COL)] * PART2_WEIGHT
 
 DRAG = 0.5
-TEMP = 0.25
-K_E = 180000
+TEMP = 50
 EPSILON = 400
 
 np.random.seed(42)
 
 MAX_PARTICLES = 260
-ADD_PARTICLE_MS = 700
+ADD_PARTICLE_MS = 500
 ADD_PARTICLE_ANGLE_SPEED = 0.4
 
 pos, vel, acc, charges, sizes, colors = np.zeros((MAX_PARTICLES, 2), dtype=np.float64), np.zeros((MAX_PARTICLES, 2), dtype=np.float64),\
@@ -64,8 +63,7 @@ ELLIPSE_A = WIDTH / 2
 ELLIPSE_B = HEIGHT / 2
 ANGLE = 0
 
-TEMP /= DT
-ADD_PARTICLE_ANGLE_ADVANCE = ADD_PARTICLE_ANGLE_SPEED * ADD_PARTICLE_MS
+ADD_PARTICLE_ANGLE_ADVANCE = ADD_PARTICLE_ANGLE_SPEED * ADD_PARTICLE_MS * 0.001
 
 running = True
 frame_count = 0
@@ -138,6 +136,8 @@ while running:
 
         charges_prod = charges[:N, np.newaxis] * charges[np.newaxis, :N]
 
+        epsilon_matrix = EPSILON * np.abs(charges_prod)
+
         min_r_sq = (0.4 * sigma)**2
         r_sq_clamped = np.maximum(r_sq, min_r_sq)
 
@@ -146,14 +146,12 @@ while running:
         sr6 = sr**6
         sr12 = sr6**2
 
-        F_r = 24 * EPSILON * (2 * sr12 - sr6) / r_sq_clamped
+        F_r = 24 * epsilon_matrix * (2 * sr12 - sr6) / r_sq_clamped
 
-        # is_similar = charges_prod > 0
-        # F_r = np.where(is_similar, 48 * EPSILON * sr12 / r_sq_clamped, F_r)
+        is_similar = charges_prod > 0
+        F_r = np.where(is_similar, 48 * epsilon_matrix * sr12 / r_sq_clamped, F_r)
 
-        F_c = K_E * charges_prod / (r_sq_clamped * r)
-
-        force_scalar = F_r + F_c
+        force_scalar = F_r
 
         forces = diff * force_scalar[:, :, np.newaxis]
         acc = np.sum(forces, axis=1)
@@ -171,11 +169,11 @@ while running:
 
         pos[:N] += vel[:N] * DT
 
-    # # Annealing
-    # if TEMP > 0.01:
-    #     TEMP *= 0.99999
-    # else:
-    #     TEMP = 0
+    # Annealing
+    if TEMP > 0.01:
+        TEMP *= 0.99999
+    else:
+        TEMP = 0
 
     if frame_count % 2 == 0:
         drawx = np.round((pos[:N, 0] - camera_posx) * camera_zoom).astype(int)
